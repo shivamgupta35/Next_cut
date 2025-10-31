@@ -4,7 +4,7 @@ WORKDIR /app
 
 # install openssl libs and ca-certs so Prisma can generate / run engines
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openssl ca-certificates libssl1.1 && \
+    apt-get install -y --no-install-recommends openssl ca-certificates libssl3 && \
     rm -rf /var/lib/apt/lists/*
 
 # copy package files first for cache
@@ -20,7 +20,7 @@ RUN npm ci
 COPY . .
 
 # ensure prisma client is generated for linux target(s)
-RUN npx prisma generate
+RUN npx prisma generate --binary-target=debian-openssl-3.0.x
 
 # build the project (TypeScript compile)
 RUN npm run build
@@ -31,7 +31,7 @@ WORKDIR /app
 
 # Install runtime openssl library required by Prisma library engine
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libssl1.1 ca-certificates && \
+    apt-get install -y --no-install-recommends libssl3 ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # copy built artifacts and node_modules from builder
