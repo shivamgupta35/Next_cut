@@ -2,8 +2,10 @@
 FROM node:22-slim AS builder
 WORKDIR /app
 
-# Install openssl (Prisma needs it) and ca-certificates for HTTPS
-RUN apt-get update && apt-get install -y openssl ca-certificates --no-install-recommends && rm -rf /var/lib/apt/lists/*
+# install openssl libs and ca-certs so Prisma can generate / run engines
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends openssl ca-certificates libssl1.1 && \
+    rm -rf /var/lib/apt/lists/*
 
 # copy package files first for cache
 COPY package*.json ./
@@ -11,19 +13,28 @@ COPY package*.json ./
 # copy prisma schema early so `npx prisma generate` can find it during postinstall
 COPY prisma ./prisma
 
-# install dependencies (runs postinstall and prisma generate)
+# install dependencies (runs postinstall and prisma generate if postinstall exists)
 RUN npm ci
 
 # copy rest of source
 COPY . .
 
-# build the project
+# ensure prisma client is generated for linux target(s)
+RUN npx prisma generate
+
+# build the project (TypeScript compile)
 RUN npm run build
 
 # ---- production stage ----
 FROM node:22-slim AS runner
 WORKDIR /app
 
+# Install runtime openssl library required by Prisma library engine
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libssl1.1 ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# copy built artifacts and node_modules from builder
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
