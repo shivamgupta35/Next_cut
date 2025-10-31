@@ -20,7 +20,8 @@ RUN npm ci
 COPY . .
 
 # ensure prisma client is generated for linux target(s)
-RUN npx prisma generate --binary-target=debian-openssl-3.0.x
+RUN npx prisma generate
+
 
 # build the project (TypeScript compile)
 RUN npm run build
