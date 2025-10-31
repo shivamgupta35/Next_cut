@@ -150,3 +150,10 @@ app.listen(PORT, () => {
   console.log(`🔗 API Debug: http://localhost:${PORT}/debug`);
   console.log(`🏥 Health: http://localhost:${PORT}/health`);
 });
+import cors from "cors";
+
+app.use(cors({
+  origin: ["https://next-cut.vercel.app"],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true,
+}));
