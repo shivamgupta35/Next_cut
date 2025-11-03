@@ -19,49 +19,57 @@ console.log("DATABASE_URL:", process.env.DATABASE_URL ? "Set" : "Not set");
 console.log("RAZORPAY_KEY_ID:", process.env.RAZORPAY_KEY_ID ? "Set" : "Not set");
 console.log("========================");
 
-// ✅ CORS Configuration
+// ✅ CORS Configuration — Final Stable Version
 const allowedOrigins = [
   "https://nextcut-seven.vercel.app", // your Vercel frontend
-  "https://next-cut-frontend-e6zu.vercel.app", // any other vercel link
+  "https://next-cut-frontend-e6zu.vercel.app", // backup vercel domain
   "http://localhost:5173", // local dev
   "http://localhost:3000",
 ];
 
-// Allow preview builds on Vercel dynamically
-const isVercelPreview = (origin?: string) =>
-  typeof origin === "string" && /\.vercel\.app$/.test(origin);
+// ✅ Detect Vercel preview builds dynamically
+const isVercelPreview = (origin = "") => /\.vercel\.app$/.test(origin);
 
+// Always set standard CORS headers
+app.use((req, res, next) => {
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+  next();
+});
+
+// Apply CORS middleware
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true); // allow curl/postman
+      if (!origin) return callback(null, true); // Allow curl/postman
       if (allowedOrigins.includes(origin) || isVercelPreview(origin)) {
         return callback(null, true);
       }
-      console.warn("❌ Blocked by CORS:", origin);
-      return callback(new Error("Not allowed by CORS"), false);
+      console.warn("❌ CORS blocked:", origin);
+      // Deny cleanly (don’t throw)
+      return callback(null, false);
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-      "Accept",
-      "Origin",
-    ],
-    optionsSuccessStatus: 204,
   })
 );
 
-// Handle all preflight requests
-app.options("*", (req, res) => res.sendStatus(204));
+// ✅ Global preflight handler (very important for Vercel)
+app.options("*", (req, res) => {
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.sendStatus(200);
+});
 
 // Body parsers
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// ✅ Health endpoints
+// ✅ Health check endpoints
 app.get("/", (req, res) => {
   res.json({
     status: "OK",
@@ -82,7 +90,16 @@ app.get("/health", (req, res) => {
   });
 });
 
-// ✅ Mount routes
+// ✅ Optional: CORS Test Endpoint
+app.get("/cors-test", (req, res) => {
+  res.json({
+    origin: req.headers.origin,
+    message: "CORS working ✅",
+    time: new Date().toISOString(),
+  });
+});
+
+// ✅ Mount Routes
 app.use("/user", userRouter);
 app.use("/barber", barberRouter);
 app.use("/payment", paymentRoutes);

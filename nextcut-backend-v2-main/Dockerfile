@@ -22,7 +22,6 @@ COPY . .
 # ensure prisma client is generated for linux target(s)
 RUN npx prisma generate
 
-
 # build the project (TypeScript compile)
 RUN npm run build
 
