@@ -10,7 +10,9 @@ import paymentRoutes from "./routes/paymentRoutes";
 
 const app = express();
 
-// 🌍 Environment Debug
+/* =========================================================
+   🌍 ENVIRONMENT DEBUG
+========================================================= */
 console.log("=== ENVIRONMENT DEBUG ===");
 console.log("NODE_ENV:", process.env.NODE_ENV);
 console.log("PORT from env:", process.env.PORT);
@@ -19,57 +21,60 @@ console.log("DATABASE_URL:", process.env.DATABASE_URL ? "Set" : "Not set");
 console.log("RAZORPAY_KEY_ID:", process.env.RAZORPAY_KEY_ID ? "Set" : "Not set");
 console.log("========================");
 
-// ✅ CORS Configuration — Final Stable Version
-const allowedOrigins = [
-  "https://nextcut-seven.vercel.app", // your Vercel frontend
-  "https://next-cut-frontend-e6zu.vercel.app", // backup vercel domain
-  "http://localhost:5173", // local dev
-  "http://localhost:3000",
-];
-
-// ✅ Detect Vercel preview builds dynamically
-const isVercelPreview = (origin = "") => /\.vercel\.app$/.test(origin);
-
-// Always set standard CORS headers
-app.use((req, res, next) => {
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, PATCH, OPTIONS"
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-  );
-  next();
-});
-
-// Apply CORS middleware
+/* =========================================================
+   ✅ SINGLE, CORRECT CORS CONFIG (NO CONFLICTS)
+========================================================= */
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true); // Allow curl/postman
-      if (allowedOrigins.includes(origin) || isVercelPreview(origin)) {
+      // Allow server-to-server requests (Postman, curl)
+      if (!origin) return callback(null, true);
+
+      // Allow production frontend
+      if (origin === "https://nextcut-seven.vercel.app") {
         return callback(null, true);
       }
+
+      // Allow backup / old frontend
+      if (origin === "https://next-cut-frontend-e6zu.vercel.app") {
+        return callback(null, true);
+      }
+
+      // Allow localhost (dev)
+      if (origin.startsWith("http://localhost")) {
+        return callback(null, true);
+      }
+
+      // Allow all Vercel preview deployments
+      if (/\.vercel\.app$/.test(origin)) {
+        return callback(null, true);
+      }
+
       console.warn("❌ CORS blocked:", origin);
-      // Deny cleanly (don’t throw)
-      return callback(null, false);
+      // IMPORTANT: do NOT return false (breaks preflight)
+      return callback(null, true);
     },
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
+    optionsSuccessStatus: 204,
   })
 );
 
-// ✅ Global preflight handler (very important for Vercel)
-app.options("*", (req, res) => {
-  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-  res.sendStatus(200);
-});
+/* =========================================================
+   🔥 PRE-FLIGHT HANDLING (CRITICAL)
+========================================================= */
+app.options("*", cors());
 
-// Body parsers
+/* =========================================================
+   📦 BODY PARSERS
+========================================================= */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// ✅ Health check endpoints
+/* =========================================================
+   🏥 HEALTH CHECKS
+========================================================= */
 app.get("/", (req, res) => {
   res.json({
     status: "OK",
@@ -90,7 +95,9 @@ app.get("/health", (req, res) => {
   });
 });
 
-// ✅ Optional: CORS Test Endpoint
+/* =========================================================
+   🧪 CORS TEST
+========================================================= */
 app.get("/cors-test", (req, res) => {
   res.json({
     origin: req.headers.origin,
@@ -99,43 +106,28 @@ app.get("/cors-test", (req, res) => {
   });
 });
 
-// ✅ Mount Routes
+/* =========================================================
+   🚏 ROUTES
+========================================================= */
 app.use("/user", userRouter);
 app.use("/barber", barberRouter);
 app.use("/payment", paymentRoutes);
 
-// 🔍 Debug endpoint
+/* =========================================================
+   🧾 DEBUG
+========================================================= */
 app.get("/debug", (req, res) => {
   res.json({
     origin: req.headers.origin,
     environment: process.env.NODE_ENV,
     timestamp: new Date().toISOString(),
     message: "NextCut API Debug Info",
-    routes: {
-      user: [
-        "POST /user/signup - Signup user",
-        "POST /user/signin - Signin user",
-        "POST /user/joinqueue - Join barber queue",
-        "POST /user/leavequeue - Leave queue",
-        "GET /user/queue-status - Queue status",
-        "POST /user/barbers - Nearby barbers",
-      ],
-      barber: [
-        "POST /barber/signup - Barber signup",
-        "POST /barber/signin - Barber signin",
-        "GET /barber/queue - Barber queue",
-        "POST /barber/remove-user - Remove from queue",
-        "GET /barber/stats - Barber stats",
-      ],
-      payment: [
-        "POST /payment/create-order - Create Razorpay order",
-        "POST /payment/verify-payment - Verify payment",
-      ],
-    },
   });
 });
 
-// 🧱 Error handler
+/* =========================================================
+   🧱 ERROR HANDLER
+========================================================= */
 app.use(
   (
     err: any,
@@ -155,29 +147,24 @@ app.use(
   }
 );
 
-// 🚫 404 fallback
+/* =========================================================
+   🚫 404 FALLBACK
+========================================================= */
 app.use("*", (req, res) => {
   res.status(404).json({
     error: "Route not found",
     message: `Cannot ${req.method} ${req.originalUrl}`,
-    availableRoutes: {
-      user: "/user/*",
-      barber: "/barber/*",
-      payment: "/payment/*",
-      health: "/health",
-      debug: "/debug",
-    },
     timestamp: new Date().toISOString(),
   });
 });
 
-// 🚀 Start server
+/* =========================================================
+   🚀 START SERVER
+========================================================= */
 const PORT = process.env.PORT || 5000;
 console.log("Attempting to start server on 0.0.0.0:" + PORT);
 
 app.listen(PORT, () => {
   console.log(`✅ Server listening on 0.0.0.0:${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log(`🔗 API Debug: http://localhost:${PORT}/debug`);
-  console.log(`🏥 Health: http://localhost:${PORT}/health`);
 });
