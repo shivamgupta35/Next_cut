@@ -22,49 +22,32 @@ console.log("RAZORPAY_KEY_ID:", process.env.RAZORPAY_KEY_ID ? "Set" : "Not set")
 console.log("========================");
 
 /* =========================================================
-   ✅ SINGLE, CORRECT CORS CONFIG (NO CONFLICTS)
+   ✅ SINGLE, CORRECT CORS CONFIG (FIXED)
 ========================================================= */
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow server-to-server requests (Postman, curl)
-      if (!origin) return callback(null, true);
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    // Allow server-to-server tools (Postman, curl)
+    if (!origin) return callback(null, true);
 
-      // Allow production frontend
-      if (origin === "https://nextcut-seven.vercel.app") {
-        return callback(null, true);
-      }
-
-      // Allow backup / old frontend
-      if (origin === "https://next-cut-frontend-e6zu.vercel.app") {
-        return callback(null, true);
-      }
-
-      // Allow localhost (dev)
-      if (origin.startsWith("http://localhost")) {
-        return callback(null, true);
-      }
-
-      // Allow all Vercel preview deployments
-      if (/\.vercel\.app$/.test(origin)) {
-        return callback(null, true);
-      }
-
-      console.warn("❌ CORS blocked:", origin);
-      // IMPORTANT: do NOT return false (breaks preflight)
+    if (
+      origin === "https://nextcut-seven.vercel.app" ||
+      origin === "https://next-cut-frontend-e6zu.vercel.app" ||
+      origin.startsWith("http://localhost") ||
+      /\.vercel\.app$/.test(origin)
+    ) {
       return callback(null, true);
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-    optionsSuccessStatus: 204,
-  })
-);
+    }
 
-/* =========================================================
-   🔥 PRE-FLIGHT HANDLING (CRITICAL)
-========================================================= */
-app.options("*", cors());
+    console.warn("❌ CORS blocked:", origin);
+    return callback(null, true); // do NOT block preflight
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // 🔥 CRITICAL FIX
 
 /* =========================================================
    📦 BODY PARSERS
@@ -135,7 +118,7 @@ app.use(
     res: express.Response,
     next: express.NextFunction
   ) => {
-    console.error("Unhandled error:", err.message);
+    console.error("Unhandled error:", err);
     res.status(500).json({
       error: "Internal server error",
       message:
