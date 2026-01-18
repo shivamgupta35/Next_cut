@@ -1,4 +1,4 @@
-// src/routes/userRoutes.ts - UPDATED VERSION
+// src/routes/userRoutes.ts
 import express, { Request, Response } from "express";
 import {
   createUser,
@@ -15,13 +15,22 @@ import { authenticateJWT, AuthenticatedRequest } from "./middleware/auth";
 const userRouter = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Helper function to extract error message
+/* =========================================================
+   🔥 CRITICAL: HANDLE CORS PREFLIGHT INSIDE ROUTER
+   (THIS FIXES YOUR ERROR)
+========================================================= */
+userRouter.options("*", (req, res) => {
+  res.sendStatus(204);
+});
+
+/* =========================================================
+   🛠️ HELPERS
+========================================================= */
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error) return error.message;
   return String(error);
 };
 
-// Helper function to check if error has a code property
 const getErrorCode = (error: unknown): string | undefined => {
   if (typeof error === "object" && error !== null && "code" in error) {
     return (error as any).code;
@@ -29,35 +38,37 @@ const getErrorCode = (error: unknown): string | undefined => {
   return undefined;
 };
 
-// ✅ User signup
+/* =========================================================
+   ✅ USER SIGNUP
+========================================================= */
 userRouter.post("/signup", async (req: Request, res: Response) => {
   try {
     const { name, phoneNumber } = req.body;
 
     if (!name || !phoneNumber) {
-      res.status(400).json({ error: "Name and phone number are required." });
-      return;
+      return res.status(400).json({ error: "Name and phone number are required." });
     }
 
     const cleanPhone = phoneNumber.replace(/\D/g, "");
     if (cleanPhone.length !== 10) {
-      res.status(400).json({ error: "Phone number must be exactly 10 digits." });
-      return;
+      return res.status(400).json({ error: "Phone number must be exactly 10 digits." });
     }
 
     if (!/^[6-9]/.test(cleanPhone)) {
-      res.status(400).json({ error: "Phone number must start with 6, 7, 8, or 9." });
-      return;
+      return res.status(400).json({
+        error: "Phone number must start with 6, 7, 8, or 9.",
+      });
     }
 
     const user = await createUser(name, cleanPhone);
+
     const token = jwt.sign(
       { sub: user.id, phoneNumber: user.phoneNumber },
       JWT_SECRET!,
       { expiresIn: "8h" }
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       user: {
         id: user.id,
         name: user.name,
@@ -68,39 +79,44 @@ userRouter.post("/signup", async (req: Request, res: Response) => {
     });
   } catch (error) {
     if (getErrorCode(error) === "P2002") {
-      res.status(409).json({ msg: "Phone number already exists" });
-      return;
+      return res.status(409).json({ msg: "Phone number already exists" });
     }
-    res.status(500).json({ msg: "Error occurred during sign up", error: getErrorMessage(error) });
+
+    return res.status(500).json({
+      msg: "Error occurred during sign up",
+      error: getErrorMessage(error),
+    });
   }
 });
 
-// ✅ User signin
+/* =========================================================
+   ✅ USER SIGNIN
+========================================================= */
 userRouter.post("/signin", async (req: Request, res: Response) => {
   try {
     const { phoneNumber } = req.body;
 
     if (!phoneNumber) {
-      res.status(400).json({ error: "Phone number is required." });
-      return;
+      return res.status(400).json({ error: "Phone number is required." });
     }
 
     const cleanPhone = phoneNumber.replace(/\D/g, "");
     if (cleanPhone.length !== 10) {
-      res.status(400).json({ error: "Phone number must be exactly 10 digits." });
-      return;
+      return res.status(400).json({ error: "Phone number must be exactly 10 digits." });
     }
 
     if (!/^[6-9]/.test(cleanPhone)) {
-      res.status(400).json({ error: "Phone number must start with 6, 7, 8, or 9." });
-      return;
+      return res.status(400).json({
+        error: "Phone number must start with 6, 7, 8, or 9.",
+      });
     }
 
     const user = await authenticateUser(cleanPhone);
 
     if (!user) {
-      res.status(401).json({ msg: "Phone number not found. Please sign up first." });
-      return;
+      return res.status(401).json({
+        msg: "Phone number not found. Please sign up first.",
+      });
     }
 
     const token = jwt.sign(
@@ -109,17 +125,22 @@ userRouter.post("/signin", async (req: Request, res: Response) => {
       { expiresIn: "8h" }
     );
 
-    res.json({
+    return res.json({
       user,
-      msg: "User Signed In Successfully",
+      msg: "User signed in successfully",
       token,
     });
   } catch (error) {
-    res.status(500).json({ msg: "Error occurred during sign in", error: getErrorMessage(error) });
+    return res.status(500).json({
+      msg: "Error occurred during sign in",
+      error: getErrorMessage(error),
+    });
   }
 });
 
-// ✅ Join queue with service selection
+/* =========================================================
+   ✅ JOIN QUEUE
+========================================================= */
 userRouter.post(
   "/joinqueue",
   authenticateJWT,
@@ -129,88 +150,110 @@ userRouter.post(
       const userId = req.user?.id;
 
       if (!userId) {
-        res.status(401).json({ error: "User not authenticated" });
-        return;
+        return res.status(401).json({ error: "User not authenticated" });
       }
 
       if (!barberId) {
-        res.status(400).json({ error: "Barber ID is required" });
-        return;
+        return res.status(400).json({ error: "Barber ID is required" });
       }
 
       if (!service || typeof service !== "string") {
-        res.status(400).json({ error: "Service is required and must be a string" });
-        return;
+        return res.status(400).json({
+          error: "Service is required and must be a string",
+        });
       }
 
-      // ✅ No hardcoded validation — accept any string service
       const queueEntry = await joinQueue(barberId, userId, service);
 
-      res.json({
+      return res.json({
         msg: `You have joined the queue for ${service}`,
         queue: queueEntry,
       });
     } catch (error) {
-      res.status(500).json({ msg: "Error joining queue", error: getErrorMessage(error) });
+      return res.status(500).json({
+        msg: "Error joining queue",
+        error: getErrorMessage(error),
+      });
     }
   }
 );
 
-// ✅ Leave queue
+/* =========================================================
+   ✅ LEAVE QUEUE
+========================================================= */
 userRouter.post(
   "/leavequeue",
   authenticateJWT,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user?.id;
+
       if (!userId) {
-        res.status(401).json({ error: "User not authenticated" });
-        return;
+        return res.status(401).json({ error: "User not authenticated" });
       }
 
       const result = await removeFromQueue(userId);
+
       if (!result.success) {
-        res.status(400).json({ msg: result.message });
-        return;
+        return res.status(400).json({ msg: result.message });
       }
 
-      res.json({ msg: "You have been removed from the queue", data: result.data });
+      return res.json({
+        msg: "You have been removed from the queue",
+        data: result.data,
+      });
     } catch (error) {
-      res.status(500).json({ msg: "Error leaving queue", error: getErrorMessage(error) });
+      return res.status(500).json({
+        msg: "Error leaving queue",
+        error: getErrorMessage(error),
+      });
     }
   }
 );
 
-// ✅ Get queue status
+/* =========================================================
+   ✅ QUEUE STATUS
+========================================================= */
 userRouter.get(
   "/queue-status",
   authenticateJWT,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user?.id;
+
       if (!userId) {
-        res.status(401).json({ error: "User not authenticated" });
-        return;
+        return res.status(401).json({ error: "User not authenticated" });
       }
 
       const queueStatus = await getUserQueueStatus(userId);
-      res.json({ msg: "Queue status retrieved successfully", queueStatus });
+
+      return res.json({
+        msg: "Queue status retrieved successfully",
+        queueStatus,
+      });
     } catch (error) {
-      res.status(500).json({ msg: "Error getting queue status", error: getErrorMessage(error) });
+      return res.status(500).json({
+        msg: "Error getting queue status",
+        error: getErrorMessage(error),
+      });
     }
   }
 );
 
-// ✅ Get nearby barbers
+/* =========================================================
+   ✅ NEARBY BARBERS
+========================================================= */
 userRouter.post(
   "/barbers",
   authenticateJWT,
   async (req: Request, res: Response) => {
     try {
       const { lat, long, radius } = req.body;
+
       if (!lat || !long) {
-        res.status(400).json({ error: "Latitude and longitude are required" });
-        return;
+        return res.status(400).json({
+          error: "Latitude and longitude are required",
+        });
       }
 
       const latitude = parseFloat(lat);
@@ -218,18 +261,26 @@ userRouter.post(
       const searchRadius = radius ? parseFloat(radius) : 10;
 
       if (isNaN(latitude) || isNaN(longitude)) {
-        res.status(400).json({ error: "Invalid latitude or longitude values" });
-        return;
+        return res.status(400).json({
+          error: "Invalid latitude or longitude values",
+        });
       }
 
-      const barbers = await getBarbersNearby(latitude, longitude, searchRadius);
+      const barbers = await getBarbersNearby(
+        latitude,
+        longitude,
+        searchRadius
+      );
 
-      res.json({
+      return res.json({
         barbers,
         msg: `Found ${barbers.length} barbers within ${searchRadius}km`,
       });
     } catch (error) {
-      res.status(500).json({ msg: "Error getting nearby barbers", error: getErrorMessage(error) });
+      return res.status(500).json({
+        msg: "Error getting nearby barbers",
+        error: getErrorMessage(error),
+      });
     }
   }
 );
